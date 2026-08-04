@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>採寸データ 救出ツール</title>
+<style>
+body{font-family:'Hiragino Sans','Meiryo',sans-serif;margin:0;padding:14px;background:#f5f7fa;color:#222;}
+h1{font-size:17px;margin:0 0 4px;color:#b8430a;}
+.note{font-size:12px;color:#555;line-height:1.6;background:#fff8e1;border:1px solid #e6c700;border-radius:6px;padding:8px 10px;margin-bottom:12px;}
+.card{background:#fff;border:1px solid #ccc;border-radius:8px;padding:10px 12px;margin-bottom:10px;}
+.k{font-weight:bold;font-size:13px;color:#1a5a99;word-break:break-all;}
+.meta{font-size:12px;color:#444;margin:4px 0;}
+.big{font-size:15px;font-weight:bold;color:#1b5e20;}
+button{padding:8px 14px;font-size:13px;font-weight:bold;border:none;border-radius:6px;background:#1a5a99;color:#fff;cursor:pointer;margin:4px 4px 0 0;}
+button.g{background:#2e7d32;}
+button.s{background:#666;}
+pre{font-size:10px;background:#f0f0f0;padding:6px;border-radius:4px;max-height:150px;overflow:auto;white-space:pre-wrap;word-break:break-all;}
+.warn{color:#c00;font-weight:bold;}
+</style>
+</head>
+<body>
+<h1>🛟 採寸データ 救出ツール</h1>
+<div class="note">
+<b>使い方</b><br>
+採寸に使った<b>同じ端末・同じブラウザ</b>で開いてください。<br>
+<span class="warn">※別のURLや別のブラウザからでは端末内の保存データを読めません。</span>
+</div>
+<div id="out"></div>
+<script>
+function esc(s){return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;');}
+function dl(name,text){
+  const b=new Blob([text],{type:'application/json'});
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(b);a.download=name;a.click();
+  setTimeout(()=>URL.revokeObjectURL(a.href),3000);
+}
+function summarize(v){
+  let o;
+  try{o=JSON.parse(v);}catch(e){return {err:'JSON以外のデータ'};}
+  if(!o||typeof o!=='object')return {err:'対象外'};
+  const syms=o.symList||[];
+  let measured=0,photos=0;
+  syms.forEach(w=>{
+    const has=['wu','wm','wd','hl','hm','hr','handaiW','handaiH'].some(k=>w[k]!==''&&w[k]!=null);
+    if(has)measured++;
+    photos+=(w.photos||[]).length;
+  });
+  return {bukken:o.bukken||'(物件名なし)',savedAt:o.savedAt||'(不明)',
+          syms:syms.length,measured:measured,photos:photos,
+          floors:(o.floorData||[]).length};
+}
+(function(){
+  const out=document.getElementById('out');
+  let n=0, all={};
+  try{
+    for(let i=0;i<localStorage.length;i++){
+      const k=localStorage.key(i);
+      const v=localStorage.getItem(k);
+      all[k]=v;
+      const s=summarize(v);
+      const d=document.createElement('div');d.className='card';
+      let h='<div class="k">'+esc(k)+'</div>';
+      h+='<div class="meta">サイズ '+(v.length/1024).toFixed(0)+' KB</div>';
+      if(s.err){
+        h+='<div class="meta">'+esc(s.err)+'</div><pre>'+esc(v.slice(0,300))+'</pre>';
+      }else{
+        h+='<div class="meta">物件：<b>'+esc(s.bukken)+'</b>　保存：'+esc(s.savedAt)+'</div>';
+        h+='<div class="meta big">符号 '+s.syms+' 件 ／ うち採寸済み '+s.measured+' 件 ／ 写真 '+s.photos+' 枚 ／ フロア '+s.floors+'</div>';
+        h+='<button class="g" onclick="dlKey(\''+esc(k).replace(/'/g,"\\'")+'\')">💾 このデータを保存</button>';
+      }
+      d.innerHTML=h;out.appendChild(d);n++;
+    }
+  }catch(e){
+    out.innerHTML='<div class="card warn">保存領域を読めませんでした：'+esc(e.message)+'</div>';
+    return;
+  }
+  if(n===0){
+    out.innerHTML='<div class="card"><b class="warn">このURLには保存データがありません。</b><br><br>'+
+      'アプリと同じフォルダに置いて、同じブラウザで開き直してください。</div>';
+  }else{
+    const b=document.createElement('button');
+    b.textContent='📦 全データをまとめて保存';b.className='s';
+    b.onclick=()=>dl('rescue_all_'+Date.now()+'.json',JSON.stringify(all));
+    out.appendChild(b);
+  }
+  window.dlKey=function(k){
+    const v=localStorage.getItem(k);
+    const s=summarize(v);
+    const nm=(s.bukken||'rescue').replace(/[\\/:*?"<>|]/g,'_');
+    dl(nm+'_救出_'+Date.now()+'.json', v);
+  };
+})();
+</script>
+</body>
+</html>
